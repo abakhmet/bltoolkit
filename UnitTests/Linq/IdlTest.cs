@@ -87,12 +87,12 @@ namespace Data.Linq
 
         #region ObjectId
 
-        public interface IObjectId
+        public interface IHasObjectId
         {
             ObjectId Id { get; set; }
         }
 
-        public struct ObjectId : IObjectId
+        public struct ObjectId
         {
             public ObjectId(int value)
             {
@@ -111,12 +111,16 @@ namespace Data.Linq
             {
                 return val.m_value;
             }
+        }
 
-            public ObjectId Id
-            {
-                get { return this; }
-                set { Value = value; }
-            }
+        public class WithObjectIdBase
+        {
+            public ObjectId Id { get; set; }
+        }
+        
+        public class PersonWithObjectId : WithObjectIdBase, IHasObjectId
+        {
+            public string FistName { get; set; }
         }
 
         public struct NullableObjectId
@@ -139,6 +143,7 @@ namespace Data.Linq
                 return val.m_value;
             }
         }
+
         #endregion
 
         [Test]
@@ -447,17 +452,31 @@ namespace Data.Linq
         {
             ForMySqlProvider(
                 db =>
-                {
-                    var personIds =
-                    from p in db.Person
-                    select new ObjectId { Value = p.ID, };
+                    {
+                        var persons =
+                            from x in db.Person
+                            select new PersonWithObjectId
+                                {
+                                    Id = new ObjectId { Value = x.ID },
+                                    FistName = x.FirstName,
+                                };
 
-                    var r = GetFromSourceById(personIds, 1).ToArray();
-                    Assert.That(r, Is.Not.Null);
-                });
+                        // this works
+                        var r1 = GetFromSourceByIdWithClassConstraint(persons, 5).ToArray();
+                        Assert.That(r1, Is.Not.Null);
+
+                        // but this fails
+                        var r2 = GetFromSourceByIdWithInterfaceConstraint(persons, 5).ToArray();
+                        Assert.That(r2, Is.Not.Null);
+                    });
         }
 
-        private IQueryable<T> GetFromSourceById<T>(IQueryable<T> source, int id) where T : IObjectId
+        private IQueryable<T> GetFromSourceByIdWithClassConstraint<T>(IQueryable<T> source, int id) where T : WithObjectIdBase
+        {
+            return from x in source where x.Id == id select x;
+        }
+
+        private IQueryable<T> GetFromSourceByIdWithInterfaceConstraint<T>(IQueryable<T> source, int id) where T : IHasObjectId
         {
             return from x in source where x.Id == id select x;
         }
